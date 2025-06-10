@@ -98,7 +98,7 @@ def main():
     if 'sync_status' not in st.session_state:
         st.session_state.sync_status = "idle"
 
-    st.markdown("""<style>...</style>""", unsafe_allow_html=True)
+    st.markdown("""<style>...</style>""", unsafe_allow_html=True) # CSS disembunyikan
     st.title("💼 Kalkulator ROI 5 Tahun untuk Implementasi Proyek")
     st.markdown("**Alat interaktif untuk menghitung potensi Return on Investment (ROI) dari implementasi solusi baru.**")
     st.markdown("---")
@@ -165,6 +165,7 @@ def main():
             total_monthly_savings = staff_savings_monthly + noshow_savings_monthly - maintenance_cost
             annual_savings = total_monthly_savings * 12
             payback_period = total_investment / total_monthly_savings if total_monthly_savings > 0 else float("inf")
+            
             report_data = {
                 "timestamp": get_wib_time(), "consultant_name": consultant_name, "consultant_email": consultant_email, "consultant_phone": consultant_phone,
                 "client_name": client_name, "client_location": client_location, "total_staff": total_staff, "admin_staff": admin_staff, "monthly_appointments": monthly_appointments,
