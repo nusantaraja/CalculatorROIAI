@@ -121,29 +121,40 @@ def generate_charts(data):
     
     return figs
 
+# GANTI FUNGSI LAMA INI DENGAN YANG BARU DI ROI_Calc.py
+
 def generate_pdf_report(report_data, consultant_info, figs):
-    """Membuat laporan PDF dari data yang dihitung."""
+    """Membuat laporan PDF dari data yang dihitung, dengan fallback font."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # Coba gunakan font DejaVu, jika gagal, beralih ke Arial
     font_family = "DejaVu"
     try:
-        # Asumsi font berada di dalam folder 'fonts/ttf' di root proyek Anda
-        # Jika tidak ada, FPDF akan menggunakan font standar
         font_base_path = "fonts/ttf/"
         pdf.add_font("DejaVu", "", f"{font_base_path}DejaVuSans.ttf")
         pdf.add_font("DejaVu", "B", f"{font_base_path}DejaVuSans-Bold.ttf")
-    except RuntimeError:
-        st.sidebar.warning(f"Font 'DejaVu' tidak ditemukan. Menggunakan 'Arial'.")
-        font_family = "Arial"
+        # Tambahkan varian lain jika Anda sudah mengunggahnya
+        with suppress(FileNotFoundError, RuntimeError):
+             pdf.add_font("DejaVu", "I", f"{font_base_path}DejaVuSans-Oblique.ttf")
+             pdf.add_font("DejaVu", "BI", f"{font_base_path}DejaVuSans-BoldOblique.ttf")
 
+    except (FileNotFoundError, RuntimeError):
+        font_family = "Arial"  # Font fallback yang aman
+        st.warning(
+            f"⚠️ Font 'DejaVu' tidak ditemukan. Laporan PDF akan dibuat menggunakan font '{font_family}'. "
+            "Pastikan folder `fonts/ttf/` dan isinya sudah diunggah dengan benar.", 
+            icon="ℹ️"
+        )
+
+    # Mulai membuat konten PDF menggunakan font_family yang sudah ditentukan
     pdf.set_font(font_family, style="B", size=16)
     pdf.cell(0, 10, f"Laporan Analisis ROI - {report_data.get('client_name', 'N/A')}", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font(font_family, style="", size=10)
     pdf.cell(0, 5, f"Tanggal Dibuat: {get_wib_time()}", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(10)
 
-    # ... (Sisa dari fungsi generate_pdf_report tetap sama, hanya beberapa penyesuaian teks) ...
     pdf.set_font(font_family, style="B", size=12)
     pdf.cell(0, 8, "Informasi Konsultan", new_x="LMARGIN", new_y="NEXT", border="B")
     pdf.set_font(font_family, style="", size=10)
@@ -158,13 +169,27 @@ def generate_pdf_report(report_data, consultant_info, figs):
     pdf.cell(0, 6, f"Nama: {report_data.get('client_name', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, f"Lokasi: {report_data.get('client_location', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
-    
-    # ... (Detail hasil utama, perhitungan, dan visualisasi) ...
+
     pdf.set_font(font_family, style="B", size=12)
     pdf.cell(0, 8, "Hasil Utama Analisis ROI", new_x="LMARGIN", new_y="NEXT", border="B")
-    # ... (tabel hasil) ...
-    pdf.ln(10)
-
+    pdf.set_font(font_family, style="", size=10)
+    col_width = pdf.w / 2 - pdf.l_margin - 1
+    line_height = 7
+    pdf.cell(col_width, line_height, "Investasi Awal:", border=1)
+    pdf.cell(col_width, line_height, format_currency(report_data.get("total_investment", 0)), new_x="LMARGIN", new_y="NEXT", border=1, align="R")
+    pdf.cell(col_width, line_height, "Penghematan Tahunan:", border=1)
+    pdf.cell(col_width, line_height, format_currency(report_data.get("annual_savings", 0)), new_x="LMARGIN", new_y="NEXT", border=1, align="R")
+    roi_1y = report_data.get("roi_1_year", float("inf"))
+    pdf.cell(col_width, line_height, "ROI 1 Tahun:", border=1)
+    pdf.cell(col_width, line_height, f"{roi_1y:.1f}%" if roi_1y != float("inf") else "N/A", new_x="LMARGIN", new_y="NEXT", border=1, align="R")
+    roi_5y = report_data.get("roi_5_year", float("inf"))
+    pdf.cell(col_width, line_height, "ROI 5 Tahun:", border=1)
+    pdf.cell(col_width, line_height, f"{roi_5y:.1f}%" if roi_5y != float("inf") else "N/A", new_x="LMARGIN", new_y="NEXT", border=1, align="R")
+    pb = report_data.get("payback_period", float("inf"))
+    pdf.cell(col_width, line_height, "Periode Pengembalian (Bulan):", border=1)
+    pdf.cell(col_width, line_height, f"{pb:.1f}" if pb != float("inf") else "N/A", new_x="LMARGIN", new_y="NEXT", border=1, align="R")
+    pdf.ln(5)
+    
     pdf.set_font(font_family, style="B", size=12)
     pdf.cell(0, 8, "Visualisasi Data", new_x="LMARGIN", new_y="NEXT", border="B")
     pdf.ln(5)
@@ -172,7 +197,6 @@ def generate_pdf_report(report_data, consultant_info, figs):
         for i, fig in enumerate(figs):
             if fig is None: continue
             try:
-                # Simpan grafik ke buffer memori sementara
                 chart_buffer = io.BytesIO()
                 fig.savefig(chart_buffer, format="PNG", bbox_inches="tight", dpi=200)
                 chart_buffer.seek(0)
