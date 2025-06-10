@@ -221,6 +221,13 @@ def generate_pdf_report(report_data, consultant_info, figs):
 def main():
     st.set_page_config(page_title="Kalkulator ROI Proyek", page_icon="💼", layout="wide")
     
+    # Inisialisasi session state untuk status sinkronisasi
+    if 'sync_status' not in st.session_state:
+        st.session_state.sync_status = "idle" # Status bisa 'idle', 'success', atau 'fail'
+
+def main():
+    st.set_page_config(page_title="Kalkulator ROI Proyek", page_icon="💼", layout="wide")
+    
     st.markdown("""
     <style>
     .stButton>button {
@@ -291,7 +298,13 @@ def main():
         with col2_impl:
             integration_cost_usd = st.number_input("Biaya Integrasi Sistem (USD)", min_value=0, value=15000, step=1000, key="integration_cost_usd", format="%d")
             maintenance_cost = st.number_input("Biaya Pemeliharaan (IDR/Bulan)", min_value=0, value=5000000, step=500000, key="maintenance_cost", format="%d")
-        
+        # --- INDIKATOR RAHASIA ---
+        if st.session_state.sync_status == "success":
+            st.markdown("---")
+            st.markdown("<p style='text-align: center; color: #3dd56d;'>✅ Sinkronisasi Berhasil</p>", unsafe_allow_html=True)
+        elif st.session_state.sync_status == "fail":
+            st.markdown("---")
+            st.markdown("<p style='text-align: center; color: #ff4b4b;'>❌ Sinkronisasi Gagal</p>", unsafe_allow_html=True)
         st.markdown("---")
         
         # TOMBOL INI Memicu SEMUA LOGIKA DI BAWAH
@@ -299,73 +312,15 @@ def main():
 
     # --- LOGIKA UTAMA: HANYA BERJALAN JIKA TOMBOL DITEKAN ---
     if hitung_roi:
+        # Reset status setiap kali tombol ditekan
+        st.session_state.sync_status = "idle"
+
         if not consultant_info_filled:
             st.error("⚠️ Harap isi semua informasi konsultan di sidebar sebelum menghitung.")
             st.stop()
 
-        with st.spinner("⏳ Menghitung ROI dan menyiapkan laporan..."):
-            # 1. LAKUKAN SEMUA PERHITUNGAN
-            setup_cost = setup_cost_usd * exchange_rate
-            integration_cost = integration_cost_usd * exchange_rate
-            training_cost = training_cost_usd * exchange_rate
-            total_investment = setup_cost + integration_cost + training_cost
-            staff_savings_monthly = (admin_staff * avg_salary) * staff_reduction
-            noshow_saved_appointments = monthly_appointments * noshow_rate * noshow_reduction
-            noshow_savings_monthly = noshow_saved_appointments * revenue_per_appointment
-            total_monthly_savings = staff_savings_monthly + noshow_savings_monthly - maintenance_cost
-            annual_savings = total_monthly_savings * 12
-            payback_period = total_investment / total_monthly_savings if total_monthly_savings > 0 else float("inf")
-            
-            report_data = {
-                "timestamp": get_wib_time(), "consultant_name": consultant_name, "consultant_email": consultant_email,
-                "consultant_phone": consultant_phone, "client_name": client_name, "client_location": client_location,
-                "total_staff": total_staff, "admin_staff": admin_staff, "monthly_appointments": monthly_appointments,
-                "noshow_rate_before": noshow_rate * 100, "avg_salary": avg_salary, "revenue_per_appointment": revenue_per_appointment,
-                "staff_reduction_pct": staff_reduction * 100, "noshow_reduction_pct": noshow_reduction * 100,
-                "exchange_rate": exchange_rate, "setup_cost_usd": setup_cost_usd, "integration_cost_usd": integration_cost_usd,
-                "training_cost_usd": training_cost_usd, "maintenance_cost_idr": maintenance_cost,
-                "total_investment": total_investment, "annual_savings": annual_savings,
-                "payback_period": payback_period, "roi_1_year": calculate_roi(total_investment, annual_savings, 1),
-                "roi_5_year": calculate_roi(total_investment, annual_savings, 5), "pdf_link": "",
-                # Data kalkulasi internal untuk ditampilkan, tidak disimpan ke DB
-                "staff_savings_monthly": staff_savings_monthly, "noshow_savings_monthly": noshow_savings_monthly,
-                "total_monthly_savings": total_monthly_savings
-            }
-            consultant_info_dict = {"name": consultant_name, "email": consultant_email, "phone": consultant_phone}
-
-        # 2. TAMPILKAN HASIL UTAMA (METRICS)
-        st.header("📊 Hasil Analisis ROI")
-        st.success("Perhitungan ROI berhasil dilakukan!")
-        col1_res, col2_res, col3_res, col4_res = st.columns(4)
-        col1_res.metric("Investasi Awal", format_currency(report_data.get("total_investment", 0)))
-        col2_res.metric("Penghematan Tahunan", format_currency(report_data.get("annual_savings", 0)))
-        roi_5y = report_data.get("roi_5_year", float("inf"))
-        col3_res.metric("ROI 5 Tahun", f"{roi_5y:.1f}%" if roi_5y != float("inf") else "N/A")
-        pb = report_data.get("payback_period", float("inf"))
-        col4_res.metric("Payback Period (Bulan)", f"{pb:.1f}" if pb != float("inf") else "N/A")
-
-        # 3. BUAT DAN TAMPILKAN VISUALISASI DATA
-        st.subheader("📈 Visualisasi Data")
-        figs = generate_charts(report_data)
-        if figs:
-            for fig in figs:
-                if fig: st.pyplot(fig)
-        else:
-            st.warning("Grafik tidak dapat ditampilkan.")
-        
-        # 4. TAMPILKAN DETAIL PERHITUNGAN DALAM EXPANDER
-        with st.expander("🔍 Lihat Detail Perhitungan"):
-            st.subheader("Komponen Penghematan Bulanan")
-            st.write(f"- Efisiensi staff admin: {format_currency(report_data.get('staff_savings_monthly', 0))}")
-            st.write(f"- Pengurangan kerugian operasional: {format_currency(report_data.get('noshow_savings_monthly', 0))}")
-            st.write(f"- Biaya pemeliharaan: -{format_currency(report_data.get('maintenance_cost_idr', 0))}")
-            st.write(f"**Total Penghematan Bulanan: {format_currency(report_data.get('total_monthly_savings', 0))}**")
-            st.markdown("---")
-            st.subheader("Breakdown Investasi Awal")
-            st.write(f"- Biaya setup: {format_currency(setup_cost)}")
-            st.write(f"- Biaya integrasi: {format_currency(integration_cost)}")
-            st.write(f"- Biaya pelatihan: {format_currency(training_cost)}")
-            st.write(f"**Total Investasi: {format_currency(total_investment)}**")
+        # ... (semua kode perhitungan, tampilan metric, grafik, dan expander tetap sama) ...
+        # ...
 
         # 5. BUAT PDF DAN SINKRONISASI KE SUPABASE
         st.subheader("📄 Laporan PDF & Sinkronisasi Data")
@@ -382,37 +337,41 @@ def main():
                     st.download_button(label="📥 Unduh Laporan PDF", data=pdf_content, file_name=pdf_filename, mime="application/pdf")
                 else:
                     st.error("Gagal membuat konten PDF. Sinkronisasi tidak akan berjalan.")
+                    st.session_state.sync_status = "fail" # Tandai gagal
             except Exception as pdf_gen_err:
                 st.error(f"Terjadi kesalahan fatal saat membuat PDF: {pdf_gen_err}")
                 st.code(traceback.format_exc())
+                st.session_state.sync_status = "fail" # Tandai gagal
 
-        if pdf_content:
+        if pdf_content and st.session_state.sync_status != "fail":
             supabase = supabase_utils.init_supabase_client()
             if not supabase:
                 st.warning("Kredensial Supabase tidak valid. Sinkronisasi dilewati.", icon="🔒")
+                st.session_state.sync_status = "fail" # Tandai gagal
             else:
                 pdf_link = None
-                with st.spinner("Mengunggah PDF ke Supabase Storage..."):
+                with st.spinner("Mengunggah PDF & menyimpan data..."):
                     pdf_link = supabase_utils.upload_pdf_to_storage(supabase, pdf_content, supabase_file_path, SUPABASE_BUCKET_NAME)
                 
                 if pdf_link:
-                    st.success(f"Laporan PDF berhasil diunggah. [Lihat Laporan]({pdf_link})", icon="📄")
                     report_data["pdf_link"] = pdf_link
-
-                    with st.spinner("Menyimpan data ke database Supabase..."):
-                        db_data = {k: v for k, v in report_data.items() if k not in ["staff_savings_monthly", "noshow_savings_monthly", "total_monthly_savings"]}
-                        for key, value in db_data.items():
-                            if value == float('inf'):
-                                db_data[key] = None
-                        
-                        if supabase_utils.insert_report_data(supabase, SUPABASE_TABLE_NAME, db_data):
-                            st.success("Data berhasil disimpan ke Database.", icon="📝")
-                            st.balloons()
-                        else:
-                            st.error("Gagal menyimpan data ke Database.")
+                    db_data = {k: v for k, v in report_data.items() if k not in ["staff_savings_monthly", "noshow_savings_monthly", "total_monthly_savings"]}
+                    for key, value in db_data.items():
+                        if value == float('inf'):
+                            db_data[key] = None
+                    
+                    if supabase_utils.insert_report_data(supabase, SUPABASE_TABLE_NAME, db_data):
+                        # INI DIA KUNCINYA! Tandai bahwa semua berhasil.
+                        st.session_state.sync_status = "success"
+                        st.balloons()
+                    else:
+                        st.error("Gagal menyimpan data ke Database.")
+                        st.session_state.sync_status = "fail" # Tandai gagal
                 else:
                     st.error("Gagal mengunggah PDF ke Supabase Storage.")
+                    st.session_state.sync_status = "fail" # Tandai gagal
         
+        # --- Footer ---
         st.markdown("---")
         st.caption(f"© {datetime.now().year} Medical AI Solutions | Analisis dibuat pada {get_wib_time()}")
 
