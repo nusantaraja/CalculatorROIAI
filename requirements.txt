@@ -1,0 +1,6 @@
+streamlit>=1.32.0
+matplotlib>=3.8.0
+numpy>=1.26.0
+fpdf2>=2.7.0
+pytz>=2023.3
+supabase>=1.0.0
